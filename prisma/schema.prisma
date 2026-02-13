@@ -1,0 +1,267 @@
+// Urban Infrastructure Failure Simulator - Database Schema
+// ER Diagram Description:
+// 
+// Core Entities:
+// ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+// │   Tenant    │────<│    User     │────<│  AuditLog   │
+// └─────────────┘     └─────────────┘     └─────────────┘
+//                            │
+//                            ▼
+// ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+// │   Asset     │────<│SimulationRun│────<│SimResult    │
+// └─────────────┘     └─────────────┘     └─────────────┘
+//        │
+//        ▼
+// ┌─────────────┐     ┌─────────────┐
+// │MaintRecord  │     │ MatProperty │
+// └─────────────┘     └─────────────┘
+//
+// Relationships:
+// - Tenant 1:N Users (multi-tenant)
+// - User 1:N AuditLogs (audit trail)
+// - User 1:N SimulationRuns (who ran simulations)
+// - Asset 1:N SimulationRuns (what was simulated)
+// - Asset 1:N MaintenanceRecords (maintenance history)
+// - SimulationRun 1:N SimulationResults (monthly results)
+// - MaterialProperty: Lookup table for base wear rates
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== TENANCY & AUTH ====================
+
+model Tenant {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  plan      String   @default("free") // free, pro, enterprise
+  settings  String?  // JSON string for tenant-specific settings
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  users     User[]
+  assets    Asset[]
+}
+
+model User {
+  id        String     @id @default(cuid())
+  email     String     @unique
+  name      String?
+  password  String     // hashed password
+  role      String     @default("viewer") // admin, engineer, viewer
+  tenantId  String
+  tenant    Tenant     @relation(fields: [tenantId], references: [id])
+  isActive  Boolean    @default(true)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  auditLogs AuditLog[]
+  simulations SimulationRun[]
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  action    String   // CREATE, UPDATE, DELETE, BULK_UPLOAD, SIMULATION_RUN
+  entity    String   // Asset, User, Simulation, etc.
+  entityId  String?
+  oldValue  String?  // JSON string of previous state
+  newValue  String?  // JSON string of new state
+  metadata  String?  // JSON string for additional context
+  createdAt DateTime @default(now())
+}
+
+// ==================== ASSET MANAGEMENT ====================
+
+enum AssetType {
+  ROAD
+  BRIDGE
+  PIPE
+  DRAINAGE
+  TUNNEL
+  RETAINING_WALL
+  SIDEWALK
+  CULVERT
+}
+
+enum AssetStatus {
+  OPERATIONAL
+  AT_RISK
+  CRITICAL
+  FAILED
+  UNDER_MAINTENANCE
+}
+
+model Asset {
+  id                  String              @id @default(cuid())
+  tenantId            String
+  tenant              Tenant              @relation(fields: [tenantId], references: [id])
+  name                String
+  assetCode           String              @unique // Unique identifier like "RD-2024-001"
+  type                String              // road, bridge, pipe, drainage, etc.
+  material            String              // asphalt, concrete, steel, pvc, etc.
+  installationDate    DateTime
+  expectedLifespan    Int                 // in years
+  trafficLoad         Float               // Average daily traffic or load factor (0-100)
+  humidityIndex       Float               @default(0.5) // 0-1 scale
+  salinityIndex       Float               @default(0.5) // 0-1 scale (coastal areas)
+  temperatureIndex    Float               @default(0.5) // 0-1 scale (extreme temps)
+  maintenanceFreq     Int                 @default(12) // months between maintenance
+  lastMaintenanceDate DateTime?
+  latitude            Float
+  longitude           Float
+  location            String?             // Human-readable location
+  currentCondition    Float               @default(100) // 0-100, 100 = perfect
+  degradationScore    Float               @default(0) // 0-100, 0 = no degradation
+  status              String              @default("operational")
+  replacementCost     Float               // Estimated replacement cost
+  metadata            String?             // JSON string for additional properties
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  simulations         SimulationRun[]
+  maintenanceRecords  MaintenanceRecord[]
+  riskAssessments     RiskAssessment[]
+}
+
+model MaintenanceRecord {
+  id          String   @id @default(cuid())
+  assetId     String
+  asset       Asset    @relation(fields: [assetId], references: [id])
+  type        String   // routine, repair, rehabilitation, replacement
+  description String
+  cost        Float
+  startDate   DateTime
+  endDate     DateTime?
+  performedBy String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ==================== MATERIAL PROPERTIES ====================
+
+model MaterialProperty {
+  id                String   @id @default(cuid())
+  material          String   @unique
+  assetType         String   // Which asset type this applies to
+  baseWearRate      Float    // Base annual degradation rate
+  durabilityFactor  Float    // 0-1, higher = more durable
+  maintenanceFactor Float    // How much maintenance helps (0-1)
+  costFactor        Float    // Multiplier for replacement cost
+  description       String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+// ==================== SIMULATION ENGINE ====================
+
+enum SimulationStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+model SimulationRun {
+  id              String             @id @default(cuid())
+  assetId         String?
+  asset           Asset?             @relation(fields: [assetId], references: [id])
+  userId          String
+  user            User               @relation(fields: [userId], references: [id])
+  name            String
+  description     String?
+  scenarioType    String             @default("standard") // standard, optimistic, pessimistic, custom
+  yearsToSimulate Int                @default(5)
+  customParams    String?            // JSON string for custom simulation parameters
+  status          String             @default("pending")
+  startedAt       DateTime?
+  completedAt     DateTime?
+  errorMessage    String?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  results         SimulationResult[]
+  comparisonId    String?            // For grouping simulations for comparison
+}
+
+model SimulationResult {
+  id                 String         @id @default(cuid())
+  simulationId       String
+  simulation         SimulationRun  @relation(fields: [simulationId], references: [id])
+  month              Int            // Month number in simulation
+  year               Int            // Year in simulation
+  conditionScore     Float          // Asset condition at this point
+  degradationScore   Float          // Cumulative degradation
+  failureProbability Float          // 0-1 probability of failure
+  riskLevel          String         // low, medium, high, critical
+  maintenanceCost    Float?         // Projected maintenance cost
+  notes              String?
+  createdAt          DateTime       @default(now())
+}
+
+// ==================== RISK ASSESSMENT ====================
+
+model RiskAssessment {
+  id                    String   @id @default(cuid())
+  assetId               String
+  asset                 Asset    @relation(fields: [assetId], references: [id])
+  assessmentDate        DateTime @default(now())
+  overallRiskScore      Float    // 0-100
+  structuralRisk        Float    // 0-100
+  environmentalRisk     Float    // 0-100
+  operationalRisk       Float    // 0-100
+  failureWindowStart    DateTime? // Earliest expected failure date
+  failureWindowEnd      DateTime? // Latest expected failure date
+  estimatedFailureCost  Float    // Cost impact if asset fails
+  recommendedActions    String?  // JSON array of recommended actions
+  priorityRank          Int      // 1-5, 1 = highest priority
+  nextInspectionDate    DateTime?
+  assessorId            String?
+  notes                 String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
+
+// ==================== REPORTS & ANALYTICS ====================
+
+model Report {
+  id          String   @id @default(cuid())
+  tenantId    String
+  name        String
+  type        String   // summary, risk, financial, simulation
+  parameters  String?  // JSON string of report parameters
+  content     String?  // JSON string of generated report data
+  pdfPath     String?  // Path to stored PDF
+  generatedAt DateTime?
+  generatedBy String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model KPICache {
+  id              String   @id @default(cuid())
+  tenantId        String
+  kpiType         String   // total_assets, risk_distribution, budget, etc.
+  value           String   // JSON string of KPI value
+  calculatedAt    DateTime @default(now())
+  expiresAt       DateTime
+}
+
+// ==================== BACKGROUND JOBS ====================
+
+model BackgroundJob {
+  id          String   @id @default(cuid())
+  type        String   // simulation, report, bulk_upload
+  status      String   @default("pending") // pending, running, completed, failed
+  payload     String   // JSON string of job data
+  result      String?  // JSON string of job result
+  error       String?
+  progress    Int      @default(0) // 0-100 percentage
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
