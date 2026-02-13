@@ -1,14 +1,34 @@
 # Urban Infrastructure Failure Simulator
 
-A production-ready infrastructure degradation and failure prediction platform.
+This repository contains a research implementation generated using Chat.z.ai Agent Mode powered by GLM-5.
 
-This project was generated using Chat.z.ai Agent Mode powered by GLM-5.
+## Research Context
 
-## Overview
+This project was generated as part of an architectural capability evaluation of GLM-5 in full-stack application generation scenarios.
 
-Urban Infrastructure Failure Simulator enables municipalities and engineering teams to simulate infrastructure degradation over time and predict potential failure windows for roads, bridges, pipelines, and drainage systems.
+The goal is to assess:
 
-The system supports scenario branching, risk scoring, geographic visualization, and maintenance budget forecasting.
+- Schema modeling depth
+- Simulation engine logic generation
+- Multi-tenant data isolation
+- Real-time update design
+- Modular system architecture
+
+## Project Overview
+
+Urban Infrastructure Failure Simulator models infrastructure degradation over time and estimates potential failure windows for assets such as roads, bridges, and pipelines.
+
+The system includes:
+
+- Infrastructure asset management
+- Rule-based deterioration logic
+- Scenario-based simulation branching
+- Risk scoring and threshold detection
+- Budget impact estimation
+- Geographic heatmap visualization
+- Multi-tenant isolation
+- Role-based access control
+- Audit logging
 
 ## Technology Stack
 
@@ -17,34 +37,15 @@ The system supports scenario branching, risk scoring, geographic visualization, 
 - ORM: Prisma
 - Database: SQLite
 - Caching: In-memory module
-- Real-time: Socket.io
-- Deployment: Docker
+- Real-time updates: Socket.io
+- Containerization: Docker
 
-## Core Features
+## Research Objective
 
-- Infrastructure asset management
-- Rule-based degradation engine
-- Multi-scenario simulation branching
-- Risk threshold detection
-- Maintenance priority ranking
-- Budget projection
-- Geographic heatmap visualization
-- Real-time simulation progress updates
-- Multi-tenant support
-- Role-based access control
-- Full audit trail
+This project evaluates GLM-5’s ability to:
 
-## Architecture Highlights
-
-- Simulation runs stored as versioned records
-- Worker thread execution for long-running simulations
-- Cache invalidation strategy on asset changes
-- Optimistic concurrency control
-- Soft delete for non-financial records
-
-## Deployment
-
-Includes:
-- Dockerfile
-- docker-compose configuration
-- Environment variable template
+- Design relational schemas
+- Implement rule-based simulation engines
+- Structure modular backend logic
+- Maintain architectural consistency across layers
+- Handle branching simulation states
